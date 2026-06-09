@@ -5,6 +5,7 @@ workflows via Dynatrace and safely applies cost optimizations with compliance ap
 
 ## Live Demo
 https://fintelligence-775769240221.us-central1.run.app
+> Note: First load may take 10-15 seconds as the service wakes up from idle. Please refresh if it doesn't load immediately.
 
 ## What it does
 Fintelligence identifies waste in Gemini-powered financial services endpoints:
