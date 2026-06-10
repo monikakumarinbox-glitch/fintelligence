@@ -19,6 +19,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 DT_ENDPOINT = os.environ.get("DT_ENDPOINT", "").rstrip("/")
 DT_API_TOKEN = os.environ.get("DT_API_TOKEN", "")
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
+DT_PLATFORM_TOKEN = os.environ.get("DT_PLATFORM_TOKEN", "")
 
 # ─────────────────────────────────────────────
 # MOCK DATA
@@ -82,56 +83,42 @@ MOCK_SIGNALS = {
 # DYNATRACE MCP CONNECTION via ADK MCPToolset
 # ─────────────────────────────────────────────
 async def query_dynatrace_mcp() -> dict:
-    """
-    Connects to Dynatrace MCP server via ADK MCPToolset
-    and runs a DQL query to get AI workload signals.
-    """
-    from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, SseServerParams
+    from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams
 
-    dt_mcp_url = f"{DT_ENDPOINT}/api/mcp/v1/sse"
+    dt_mcp_url = "https://evy70118.apps.dynatrace.com/platform-reserved/mcp-gateway/v0.1/servers/dynatrace-mcp/mcp"
+    token = DT_PLATFORM_TOKEN or DT_API_TOKEN
+
     print(f"  Connecting to Dynatrace MCP: {dt_mcp_url}")
 
-    tools, exit_stack = await MCPToolset.from_server(
-        connection_params=SseServerParams(
+    toolset = McpToolset(
+        connection_params=StreamableHTTPConnectionParams(
             url=dt_mcp_url,
-            headers={
-                "Authorization": f"Api-Token {DT_API_TOKEN}",
-                "Content-Type": "application/json"
-            }
+            headers={"Authorization": f"Bearer {token}"}
         )
     )
 
-    print(f"  Connected — {len(tools)} MCP tools available")
+    session = await toolset._mcp_session_manager.create_session()
 
-    dql_tool = next(
-        (t for t in tools if "query" in t.name.lower() or "dql" in t.name.lower()),
-        None
-    )
+    dql = """fetch spans, from:now()-7d
+    | filter service.name == "gemini-fintech-app"
+    | summarize {
+    span_count = count(),
+    avg_input_tokens = avg(toDouble(`gen_ai.usage.input_tokens`)),
+    avg_output_tokens = avg(toDouble(`gen_ai.usage.output_tokens`)),
+    avg_duration_ms = avg(toDouble(duration)/1000000)
+    }, by: {span.name, `gen_ai.request.model`, `gen_ai.request.max_output_tokens`, `fintech.monthly_cost_usd`}"""
 
-    if not dql_tool:
-        print(f"  Available tools: {[t.name for t in tools]}")
-        await exit_stack.aclose()
+    print("  Executing DQL query via Dynatrace MCP...")
+    result = await session.call_tool('execute-dql', {'dqlQueryString': dql})
+    await toolset.close()
+
+    records = result.structuredContent.get('records', [])
+    print(f"  ✅ Got {len(records)} records from Dynatrace MCP")
+
+    if not records:
         return None
 
-    dql_query = """
-    fetch spans
-    | filter service.name == "fintelligence-demo-app"
-    | summarize
-        span_count        = count(),
-        avg_input_tokens  = avg(toDouble(`gen_ai.usage.input_tokens`)),
-        avg_output_tokens = avg(toDouble(`gen_ai.usage.output_tokens`)),
-        avg_duration_ms   = avg(toDouble(duration) / 1000000)
-      , by: {
-          span.name,
-          `gen_ai.request.model`,
-          `gen_ai.request.max_output_tokens`,
-          `fintech.monthly_cost_usd`
-        }
-    """
-
-    result = await dql_tool({"query": dql_query})
-    await exit_stack.aclose()
-    return result
+    return {"result": {"records": records}}
 
 
 def parse_mcp_response(mcp_result: dict) -> dict:
@@ -203,16 +190,7 @@ def query_dynatrace_rest() -> dict:
         "Content-Type":  "application/json"
     }
     payload = {
-        "query": """
-        fetch spans
-        | filter service.name == "fintelligence-demo-app"
-        | summarize
-            span_count        = count(),
-            avg_input_tokens  = avg(toDouble(`gen_ai.usage.input_tokens`)),
-            avg_output_tokens = avg(toDouble(`gen_ai.usage.output_tokens`)),
-            avg_duration_ms   = avg(toDouble(duration) / 1000000)
-          , by: {span.name, `gen_ai.request.model`, `gen_ai.request.max_output_tokens`, `fintech.monthly_cost_usd`}
-        """,
+        "query": "fetch spans | filter service.name == \"fintelligence-demo-app\" | summarize span_count = count(), avg_input_tokens = avg(toDouble(gen_ai.usage.input_tokens)), avg_output_tokens = avg(toDouble(gen_ai.usage.output_tokens)), avg_duration_ms = avg(toDouble(duration) / 1000000) , by: {span.name}",
         "defaultTimeframeStart": "now-24h",
         "defaultTimeframeEnd": "now"
     }
