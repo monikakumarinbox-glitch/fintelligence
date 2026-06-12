@@ -90,6 +90,10 @@ def rerun():
     REPORT = run_fintelligence_agent()
     return jsonify({"status": "complete", "report": REPORT})
 
+@app.route("/health")
+def health():
+    return "ok", 200
+
 @app.route("/api/status")
 def status():
     """Shows live stack — proof for judges."""
