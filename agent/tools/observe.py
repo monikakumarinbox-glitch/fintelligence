@@ -99,7 +99,7 @@ async def query_dynatrace_mcp() -> dict:
 
     session = await toolset._mcp_session_manager.create_session()
 
-    dql = """fetch spans, from:now()-7d
+    dql = """fetch spans, from:now()-30d
     | filter service.name == "gemini-fintech-app"
     | summarize {
     span_count = count(),
@@ -190,8 +190,8 @@ def query_dynatrace_rest() -> dict:
         "Content-Type":  "application/json"
     }
     payload = {
-        "query": "fetch spans | filter service.name == \"fintelligence-demo-app\" | summarize span_count = count(), avg_input_tokens = avg(toDouble(gen_ai.usage.input_tokens)), avg_output_tokens = avg(toDouble(gen_ai.usage.output_tokens)), avg_duration_ms = avg(toDouble(duration) / 1000000) , by: {span.name}",
-        "defaultTimeframeStart": "now-24h",
+        "query": "fetch spans | filter service.name == \"gemini-fintech-app\" | summarize span_count = count(), avg_input_tokens = avg(toDouble(gen_ai.usage.input_tokens)), avg_output_tokens = avg(toDouble(gen_ai.usage.output_tokens)), avg_duration_ms = avg(toDouble(duration) / 1000000) , by: {span.name}",
+        "defaultTimeframeStart": "now-30d",
         "defaultTimeframeEnd": "now"
     }
     response = requests.post(url, headers=headers, json=payload, timeout=30)
