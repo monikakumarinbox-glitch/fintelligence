@@ -916,7 +916,15 @@ function showToast(message, type = 'success') {
 // ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
-loadData();
+async function initDashboard() {
+    try {
+        await fetch('/api/reset', { method: 'POST' });
+    } catch(e) {
+        console.log('Reset failed, continuing...');
+    }
+    await loadData();
+}
+initDashboard();
 </script>
 </body>
 </html>

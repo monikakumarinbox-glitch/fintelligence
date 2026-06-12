@@ -40,6 +40,9 @@ print("🚀 Starting Fintelligence Agent...")
 REPORT = run_fintelligence_agent()
 print("✅ Agent complete — serving dashboard")
 
+import copy
+ORIGINAL_PENDING = copy.deepcopy(get_pending_approvals())
+ORIGINAL_APPLIED = copy.deepcopy(get_applied_actions())
 
 @app.route("/")
 def dashboard():
@@ -116,6 +119,18 @@ def status():
         }
     })
 
+@app.route("/api/reset", methods=["POST"])
+def reset():
+    """Resets approval state on every page load — fresh demo for each judge."""
+    from agent import PENDING_APPROVALS, APPLIED_ACTIONS
+    import copy
+    PENDING_APPROVALS.clear()
+    APPLIED_ACTIONS.clear()
+    for item in ORIGINAL_PENDING:
+        PENDING_APPROVALS.append(copy.deepcopy(item))
+    for item in ORIGINAL_APPLIED:
+        APPLIED_ACTIONS.append(copy.deepcopy(item))
+    return jsonify({"status": "reset"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
